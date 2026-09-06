@@ -185,18 +185,43 @@ function cozmic_core_register_post_types(): void {
 add_action( 'init', 'cozmic_core_register_post_types', 5 );
 
 /**
+ * Query arguments that sort events by when they happen.
+ *
+ * The obvious way to sort by a meta value, `meta_key` plus
+ * `orderby => meta_value`, quietly drops every post with no such meta row, so a
+ * single undated event would vanish rather than sort last. The named meta_query
+ * clauses below with an EXISTS / NOT EXISTS pair keep them all and still sort by
+ * the date where there is one.
+ *
+ * @return array<string, mixed>
+ */
+function cozmic_core_event_order_args(): array {
+	return array(
+		'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+			'relation'  => 'OR',
+			'has_start' => array(
+				'key'     => 'cozmic_start_date',
+				'compare' => 'EXISTS',
+			),
+			'no_start'  => array(
+				'key'     => 'cozmic_start_date',
+				'compare' => 'NOT EXISTS',
+			),
+		),
+		'orderby'    => array(
+			'has_start'  => 'ASC',
+			'menu_order' => 'ASC',
+		),
+	);
+}
+
+/**
  * Archive ordering.
  *
  * Services and portfolio follow the client's own hand ordering (`menu_order`,
  * which a dashboard push fills from the platform's `display_order`). Events
  * sort by start date, soonest first, because chronological is the only ordering
  * an events archive can defensibly have.
- *
- * The obvious way to sort by a meta value, `meta_key` plus
- * `orderby => meta_value`, quietly drops every post with no such meta row, so a
- * single undated event would vanish from the archive rather than sort last. The
- * named meta_query clauses below with an EXISTS / NOT EXISTS pair keep them all
- * and still sort by the date where there is one.
  *
  * @param WP_Query $query The query about to run.
  */
@@ -217,27 +242,33 @@ function cozmic_core_archive_order( WP_Query $query ): void {
 	}
 
 	if ( $query->is_post_type_archive( COZMIC_CORE_CPT_EVENT ) ) {
-		$query->set(
-			'meta_query',
-			array(
-				'relation'  => 'OR',
-				'has_start' => array(
-					'key'     => 'cozmic_start_date',
-					'compare' => 'EXISTS',
-				),
-				'no_start'  => array(
-					'key'     => 'cozmic_start_date',
-					'compare' => 'NOT EXISTS',
-				),
-			)
-		);
-		$query->set(
-			'orderby',
-			array(
-				'has_start'  => 'ASC',
-				'menu_order' => 'ASC',
-			)
-		);
+		foreach ( cozmic_core_event_order_args() as $key => $value ) {
+			$query->set( $key, $value );
+		}
 	}
 }
 add_action( 'pre_get_posts', 'cozmic_core_archive_order' );
+
+/**
+ * The same ordering inside a Query Loop block.
+ *
+ * A Query Loop on a page builds its own query from block attributes, and those
+ * attributes cannot express "order by a meta value". So the events pattern
+ * dropped onto a home page would list by post date - the order somebody typed
+ * them in - and show next spring's dinner above tonight's talent show.
+ *
+ * Only events are forced. Services and portfolio sort by `menu_order`, which
+ * the block *can* express, so that stays in the block's own attributes where a
+ * client can change it without being silently overruled.
+ *
+ * @param array<string, mixed> $query The query vars the block will use.
+ * @return array<string, mixed>
+ */
+function cozmic_core_query_loop_order( array $query ): array {
+	if ( ( $query['post_type'] ?? '' ) !== COZMIC_CORE_CPT_EVENT ) {
+		return $query;
+	}
+
+	return array_merge( $query, cozmic_core_event_order_args() );
+}
+add_filter( 'query_loop_block_query_vars', 'cozmic_core_query_loop_order' );
