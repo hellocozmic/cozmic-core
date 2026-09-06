@@ -1,0 +1,24 @@
+# Dependencies
+/node_modules/
+/vendor/
+
+# Build output (only if a custom block ever needs wp-scripts)
+/build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.code-workspace
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local env
+.env
+.env.local
+
+# Never commit packaged builds — releases are GitHub Release assets
+*.zip
