@@ -81,15 +81,7 @@ render blank forever with nothing in any log to explain it.
 
 ### Binding a pattern to a field
 
-For a plain string, use core's own source:
-
-```json
-{"metadata":{"bindings":{"content":{"source":"core/post-meta",
-  "args":{"key":"cozmic_location"}}}}}
-```
-
-For a value that needs formatting (dates, which are stored sortable and unlovely),
-use this plugin's:
+Use **`cozmic/field`**, this plugin's source, not core's `core/post-meta`:
 
 ```json
 {"metadata":{"bindings":{"content":{"source":"cozmic/field",
@@ -97,8 +89,34 @@ use this plugin's:
 ```
 
 `format` is `date`, `time`, or `datetime`, and follows the site's own format and
-timezone settings. When a field is empty the source returns null, so the block
-keeps its own placeholder content instead of collapsing to nothing.
+timezone settings.
+
+**The difference that matters is the empty case.** Every field here is
+registered with a default of `''`, so `core/post-meta` on an unset field returns
+an empty string and the bound block renders blank - an empty button, a heading
+with no words. `cozmic/field` returns null instead, which tells core to leave the
+block's own content alone. So the markup you write **is** the fallback, and it
+should be written as a good default rather than as a hint to the editor: the
+service template's button says "Get a quote" pointing at `/contact`, which is
+right for any service whose CTA fields were never filled in.
+
+Where there is no sensible default - a project's external URL, which many
+projects simply do not have - leave the template's `href` empty and put
+`cz-optional-link` on the button. The theme hides it with `:has()`. A block
+template has no conditionals, so this is the seam that stands in for one.
+
+### Computed fields
+
+Some values are composed rather than stored, for the same "no conditionals in a
+template" reason. Bind them exactly like a stored field.
+
+| Key | Produces |
+|---|---|
+| `cozmic_event_details` | The whole when-and-where line: `September 12, 2026 6:30 pm to 8:00 pm · Augusta Armory`. An end time on the same day drops the repeated date; midnight is treated as all-day and shows no time; missing pieces are left out, and if nothing is set it returns null so the template's fallback stands. |
+
+Binding a date and a location to two separate blocks was the alternative, and it
+puts a stray label on every event missing one of them. Composing the line in PHP
+puts the "if" where ifs can go.
 
 Bindings only reach the attributes core supports: paragraph and heading
 `content`, image `url`/`alt`/`title`, and button `text`/`url`/`linkTarget`/`rel`.
