@@ -3,7 +3,7 @@
  * Plugin Name:       Cozmic Core
  * Plugin URI:        https://github.com/hellocozmic/cozmic-core
  * Description:       The floor every Cozmic client site stands on: content model, client role, options, governance, and structural SEO. Never optional - deactivating it collapses the content model.
- * Version:           0.1.0
+ * Version:           0.1.1
  * Requires at least: 6.7
  * Requires PHP:      8.2
  * Author:            Cozmic Online
@@ -43,7 +43,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * theme.
  */
 
-define( 'COZMIC_CORE_VERSION', '0.1.0' );
+define( 'COZMIC_CORE_VERSION', '0.1.1' );
 define( 'COZMIC_CORE_FILE', __FILE__ );
 define( 'COZMIC_CORE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'COZMIC_CORE_URL', plugin_dir_url( __FILE__ ) );

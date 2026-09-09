@@ -271,8 +271,16 @@ function cozmic_core_event_json_ld(): void {
 		return;
 	}
 
-	$start = cozmic_core_field( 'cozmic_start_date', $post->ID );
-	if ( '' === $start ) {
+	/*
+	 * ISO 8601 with a real UTC offset, not the bare stored string.
+	 *
+	 * schema.org reads an offset-less datetime as local time, but leaves
+	 * "local to whom" for the consumer to guess, so the value here and the
+	 * date rendered on the page could disagree with nothing to reconcile
+	 * them. `c` on a value parsed in the site's timezone pins it.
+	 */
+	$start_at = cozmic_core_parse_field_date( cozmic_core_field( 'cozmic_start_date', $post->ID ) );
+	if ( null === $start_at ) {
 		return;
 	}
 
@@ -281,12 +289,12 @@ function cozmic_core_event_json_ld(): void {
 		'@type'     => 'Event',
 		'name'      => get_the_title( $post ),
 		'url'       => (string) get_permalink( $post ),
-		'startDate' => $start,
+		'startDate' => $start_at->format( 'c' ),
 	);
 
-	$end = cozmic_core_field( 'cozmic_end_date', $post->ID );
-	if ( '' !== $end ) {
-		$data['endDate'] = $end;
+	$end_at = cozmic_core_parse_field_date( cozmic_core_field( 'cozmic_end_date', $post->ID ) );
+	if ( null !== $end_at ) {
+		$data['endDate'] = $end_at->format( 'c' );
 	}
 
 	$location = cozmic_core_field( 'cozmic_location', $post->ID );

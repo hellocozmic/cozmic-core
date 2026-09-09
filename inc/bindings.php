@@ -27,6 +27,37 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Parse a stored datetime as the wall-clock time it claims to be.
+ *
+ * Field values are stored as `Y-m-d\TH:i` with no offset, because that is what
+ * the editor's `datetime-local` input produces and what somebody means when
+ * they type "6:00 pm". WordPress sets PHP's default timezone to UTC for the
+ * whole request, so `strtotime()` on such a string produces a *UTC* moment;
+ * `wp_date()` then renders it in the site's timezone and the time moves. On a
+ * Michigan site that is four or five hours, and an all-day event stored as
+ * `00:00` renders on the previous day - silently, and only on sites that are
+ * not on UTC, which is why it survives a casual check.
+ *
+ * Parsing against `wp_timezone()` is what makes the stored string mean what it
+ * says. A value that carries its own offset keeps it: PHP ignores the supplied
+ * timezone in that case, which is the behaviour we want.
+ *
+ * @param string $value Stored value.
+ * @return DateTimeImmutable|null Null when the value is empty or unparseable.
+ */
+function cozmic_core_parse_field_date( string $value ): ?DateTimeImmutable {
+	if ( '' === $value ) {
+		return null;
+	}
+
+	try {
+		return new DateTimeImmutable( $value, wp_timezone() );
+	} catch ( Exception ) {
+		return null;
+	}
+}
+
+/**
  * Format a stored field value for display.
  *
  * Dates run through `wp_date()`, so they follow the site's own date and time
@@ -42,8 +73,8 @@ function cozmic_core_format_field( string $value, string $format ): string {
 		return $value;
 	}
 
-	$timestamp = strtotime( $value );
-	if ( false === $timestamp ) {
+	$moment = cozmic_core_parse_field_date( $value );
+	if ( null === $moment ) {
 		return $value;
 	}
 
@@ -58,7 +89,7 @@ function cozmic_core_format_field( string $value, string $format ): string {
 		return $value;
 	}
 
-	return (string) wp_date( $pattern, $timestamp );
+	return (string) wp_date( $pattern, $moment->getTimestamp() );
 }
 
 /**
@@ -70,22 +101,26 @@ function cozmic_core_format_field( string $value, string $format ): string {
  * which is a trade worth making: the all-day case is common and the midnight
  * case is nearly theoretical.
  *
+ * The midnight test reads the *local* clock, not `gmdate()` of the timestamp.
+ * Testing UTC there was half of the timezone bug: it correctly recognised an
+ * all-day entry and then printed it on the day before.
+ *
  * @param string $value Stored datetime.
  */
 function cozmic_core_format_moment( string $value ): string {
-	$timestamp = strtotime( $value );
-	if ( false === $timestamp ) {
+	$moment = cozmic_core_parse_field_date( $value );
+	if ( null === $moment ) {
 		return '';
 	}
 
 	$date = (string) get_option( 'date_format' );
 	$time = (string) get_option( 'time_format' );
 
-	if ( '00:00' === gmdate( 'H:i', $timestamp ) ) {
-		return (string) wp_date( $date, $timestamp );
+	if ( '00:00' === $moment->format( 'H:i' ) ) {
+		return (string) wp_date( $date, $moment->getTimestamp() );
 	}
 
-	return (string) wp_date( $date . ' ' . $time, $timestamp );
+	return (string) wp_date( $date . ' ' . $time, $moment->getTimestamp() );
 }
 
 /**
@@ -110,15 +145,15 @@ function cozmic_core_event_when( int $post_id ): string {
 		return $when;
 	}
 
-	$start_ts = strtotime( $start );
-	$end_ts   = strtotime( $end );
-	if ( false === $end_ts || false === $start_ts || $end_ts <= $start_ts ) {
+	$start_at = cozmic_core_parse_field_date( $start );
+	$end_at   = cozmic_core_parse_field_date( $end );
+	if ( null === $end_at || null === $start_at || $end_at <= $start_at ) {
 		return $when;
 	}
 
-	$same_day = gmdate( 'Y-m-d', $start_ts ) === gmdate( 'Y-m-d', $end_ts );
+	$same_day = $start_at->format( 'Y-m-d' ) === $end_at->format( 'Y-m-d' );
 	$tail     = $same_day
-		? (string) wp_date( (string) get_option( 'time_format' ), $end_ts )
+		? (string) wp_date( (string) get_option( 'time_format' ), $end_at->getTimestamp() )
 		: cozmic_core_format_moment( $end );
 
 	return '' === $tail ? $when : $when . ' to ' . $tail;

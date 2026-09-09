@@ -140,22 +140,23 @@ function cozmic_core_sanitize_field( mixed $value, string $type ): string {
  * empty string rather than kept, because a half-valid date sorts an events
  * archive into nonsense.
  *
+ * Stored values are *local wall-clock* time, so both the parse and the format
+ * happen in the site's timezone. Reading a zoned string and then writing it out
+ * with `gmdate()` was the write half of the same timezone bug the display side
+ * had: a dashboard push of `2026-05-08T18:00:00-04:00` came back out as
+ * `2026-05-08T22:00` and the event moved four hours.
+ *
  * @param string $value Incoming datetime string.
  */
 function cozmic_core_sanitize_datetime( string $value ): string {
-	$value = trim( $value );
-	if ( '' === $value ) {
-		return '';
-	}
-
-	$timestamp = strtotime( $value );
-	if ( false === $timestamp ) {
+	$moment = cozmic_core_parse_field_date( trim( $value ) );
+	if ( null === $moment ) {
 		return '';
 	}
 
 	// A date with no time reads as midnight, which is correct for an all-day
 	// entry and harmless for anything else.
-	return gmdate( 'Y-m-d\TH:i', $timestamp );
+	return $moment->setTimezone( wp_timezone() )->format( 'Y-m-d\TH:i' );
 }
 
 /**
