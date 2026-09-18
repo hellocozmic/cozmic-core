@@ -172,18 +172,48 @@ function cozmic_core_event_when( int $post_id ): string {
  * @param int    $post_id Post ID.
  */
 function cozmic_core_computed_field( string $key, int $post_id ): ?string {
-	if ( 'cozmic_event_details' !== $key ) {
-		return null;
+	if ( 'cozmic_event_details' === $key ) {
+		$parts = array_filter(
+			array(
+				cozmic_core_event_when( $post_id ),
+				cozmic_core_field( 'cozmic_location', $post_id ),
+			)
+		);
+
+		return empty( $parts ) ? null : implode( ' · ', $parts );
 	}
 
-	$parts = array_filter(
-		array(
-			cozmic_core_event_when( $post_id ),
-			cozmic_core_field( 'cozmic_location', $post_id ),
-		)
-	);
+	/*
+	 * Where a mention ran, and when. The date is the post's own published date
+	 * rather than another field: an entry gets added when the piece appears, so
+	 * the two agree by default, and an Editor catching up on older coverage can
+	 * set the date in the Publish panel they already know. The archive sorts by
+	 * that same date, so the list and the line can never disagree.
+	 */
+	/*
+	 * Where a card's button goes. The article when there is one, and the entry's
+	 * own page when there is not, so a mention added before its link is known
+	 * renders a working button rather than a dead one. The same "put the if
+	 * where ifs can go" as the line above: a template cannot ask.
+	 */
+	if ( 'cozmic_press_link' === $key ) {
+		$url = cozmic_core_field( 'cozmic_source_url', $post_id );
 
-	return empty( $parts ) ? null : implode( ' · ', $parts );
+		return '' === $url ? (string) get_permalink( $post_id ) : $url;
+	}
+
+	if ( 'cozmic_press_details' === $key ) {
+		$parts = array_filter(
+			array(
+				cozmic_core_field( 'cozmic_publication', $post_id ),
+				(string) get_the_date( (string) get_option( 'date_format' ), $post_id ),
+			)
+		);
+
+		return empty( $parts ) ? null : implode( ' · ', $parts );
+	}
+
+	return null;
 }
 
 /**

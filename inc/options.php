@@ -53,6 +53,7 @@ function cozmic_core_setup_defaults(): array {
 			'events_enabled'    => false,
 			'portfolio_enabled' => false,
 			'blog_enabled'      => false,
+			'press_enabled'     => false,
 
 			/*
 			 * Full editing freedom (docs D8). False is the rented-site posture:

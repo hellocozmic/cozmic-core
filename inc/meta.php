@@ -147,6 +147,18 @@ function cozmic_core_field_schema(): array {
 			),
 			$cta
 		),
+		COZMIC_CORE_CPT_PRESS   => array(
+			'cozmic_publication' => array(
+				'label' => __( 'Publication', 'cozmic-core' ),
+				'type'  => 'text',
+				'help'  => __( 'Who ran the piece: a newspaper, a newsletter, a podcast.', 'cozmic-core' ),
+			),
+			'cozmic_source_url'  => array(
+				'label' => __( 'Link to the article', 'cozmic-core' ),
+				'type'  => 'url',
+				'help'  => __( 'Where the piece lives. Every card links straight here, and so does this entry\'s own address.', 'cozmic-core' ),
+			),
+		),
 		'post'                  => array(),
 		'page'                  => cozmic_core_page_banner_fields(),
 	);

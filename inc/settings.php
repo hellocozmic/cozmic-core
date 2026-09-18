@@ -109,6 +109,11 @@ function cozmic_core_setup_fields(): array {
 			'type'  => 'checkbox',
 			'help'  => __( 'Blog posts are built into WordPress, so switching this off hides them from the menu rather than removing them.', 'cozmic-core' ),
 		),
+		'press_enabled'     => array(
+			'label' => __( 'In The News', 'cozmic-core' ),
+			'type'  => 'checkbox',
+			'help'  => __( 'Coverage by somebody else. Each entry links out to the article, and they collect on one page.', 'cozmic-core' ),
+		),
 		'full_editing'      => array(
 			'label' => __( 'Full editing control', 'cozmic-core' ),
 			'type'  => 'checkbox',
@@ -249,6 +254,7 @@ function cozmic_core_register_settings(): void {
 						'events_enabled'    => array( 'type' => 'boolean' ),
 						'portfolio_enabled' => array( 'type' => 'boolean' ),
 						'blog_enabled'      => array( 'type' => 'boolean' ),
+						'press_enabled'     => array( 'type' => 'boolean' ),
 						'full_editing'      => array( 'type' => 'boolean' ),
 					),
 				),

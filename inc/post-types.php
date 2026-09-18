@@ -24,6 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 const COZMIC_CORE_CPT_SERVICE = 'cozmic_service';
 const COZMIC_CORE_CPT_EVENT   = 'cozmic_event';
 const COZMIC_CORE_CPT_PROJECT = 'cozmic_project';
+const COZMIC_CORE_CPT_PRESS   = 'cozmic_press';
 
 /**
  * The post types this plugin owns, mapped to the setup flag that gates each.
@@ -35,6 +36,7 @@ function cozmic_core_post_types(): array {
 		COZMIC_CORE_CPT_SERVICE => 'services',
 		COZMIC_CORE_CPT_EVENT   => 'events',
 		COZMIC_CORE_CPT_PROJECT => 'portfolio',
+		COZMIC_CORE_CPT_PRESS   => 'press',
 	);
 }
 
@@ -181,8 +183,61 @@ function cozmic_core_register_post_types(): void {
 			)
 		);
 	}
+
+	if ( cozmic_core_type_enabled( 'press' ) ) {
+		register_post_type(
+			COZMIC_CORE_CPT_PRESS,
+			array_merge(
+				$shared,
+				array(
+					'labels'        => cozmic_core_labels( __( 'News Mention', 'cozmic-core' ), __( 'In The News', 'cozmic-core' ) ),
+					'description'   => __( 'Coverage of the business by somebody else: press, newsletters, podcasts.', 'cozmic-core' ),
+					'menu_icon'     => 'dashicons-megaphone',
+					'menu_position' => 24,
+					'rest_base'     => 'press',
+					'has_archive'   => 'in-the-news',
+					'rewrite'       => array(
+						'slug'       => 'in-the-news',
+						'with_front' => false,
+					),
+				)
+			)
+		);
+	}
 }
 add_action( 'init', 'cozmic_core_register_post_types', 5 );
+
+/**
+ * Send a news mention's own URL to the article it is about.
+ *
+ * A mention is a pointer, not a page: the writing that matters lives on the
+ * publication's site, and the entry here holds a title, a thumbnail and a
+ * sentence. Left alone, WordPress would publish a permalink per mention, each a
+ * thin near-duplicate of a page the site does not own - and a visitor who
+ * reached one would have to find the "read it" link to get what they came for.
+ *
+ * So the archive is the page people see, its cards link straight out, and this
+ * catches anyone arriving at a single mention another way.
+ *
+ * 302, not 301: the destination belongs to somebody else and can move or go
+ * dead, and this site's URL is the stable one of the two. A mention with no
+ * link set is left to render normally.
+ */
+function cozmic_core_press_redirect(): void {
+	if ( ! is_singular( COZMIC_CORE_CPT_PRESS ) ) {
+		return;
+	}
+
+	$url = cozmic_core_field( 'cozmic_source_url' );
+
+	if ( '' === $url ) {
+		return;
+	}
+
+	wp_redirect( $url, 302 ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- the destination is deliberately external.
+	exit;
+}
+add_action( 'template_redirect', 'cozmic_core_press_redirect' );
 
 /**
  * Query arguments that sort events by when they happen.
