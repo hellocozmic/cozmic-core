@@ -44,6 +44,69 @@
 
 	var TextControl = wp.components.TextControl;
 	var TextareaControl = wp.components.TextareaControl;
+	var SelectControl = wp.components.SelectControl;
+	var Button = wp.components.Button;
+	var MediaUpload = wp.blockEditor && wp.blockEditor.MediaUpload;
+	var MediaUploadCheck = wp.blockEditor && wp.blockEditor.MediaUploadCheck;
+
+	/**
+	 * A media field: pick a file from the library, store its URL.
+	 *
+	 * The URL rather than the attachment ID, because meta here is a flat string
+	 * and every consumer - the theme's banner, a binding, a REST push from the
+	 * dashboard - wants something it can render without a second lookup. The
+	 * cost is that deleting the attachment leaves a dead URL, which is the same
+	 * trade core makes for a cover block's background.
+	 *
+	 * Falls back to a plain URL field if the media components are missing, so
+	 * the field is never unreachable.
+	 */
+	function mediaControl( key, field, value, onChange, shared ) {
+		if ( ! MediaUpload || ! MediaUploadCheck ) {
+			shared.type = 'url';
+			return el( TextControl, shared );
+		}
+
+		var name = value ? value.split( '/' ).pop() : '';
+
+		return el(
+			'div',
+			{ key: key, className: 'cozmic-core-field-media' },
+			el( 'p', { className: 'components-base-control__label' }, field.label || key ),
+			value ? el( 'p', { className: 'cozmic-core-field-media__file' }, name ) : null,
+			el(
+				MediaUploadCheck,
+				null,
+				el( MediaUpload, {
+					allowedTypes: field.allowedTypes || [ 'video' ],
+					onSelect: function ( media ) {
+						onChange( ( media && media.url ) || '' );
+					},
+					render: function ( props ) {
+						return el(
+							Button,
+							{ variant: 'secondary', onClick: props.open },
+							value ? 'Replace' : 'Choose'
+						);
+					},
+				} )
+			),
+			value
+				? el(
+						Button,
+						{
+							variant: 'link',
+							isDestructive: true,
+							onClick: function () {
+								onChange( '' );
+							},
+						},
+						'Remove'
+				  )
+				: null,
+			field.help ? el( 'p', { className: 'components-base-control__help' }, field.help ) : null
+		);
+	}
 
 	/**
 	 * Map a schema field type to a control.
@@ -65,6 +128,19 @@
 
 		if ( 'textarea' === field.type ) {
 			return el( TextareaControl, shared );
+		}
+
+		if ( 'select' === field.type ) {
+			var options = field.options || {};
+			shared.options = Object.keys( options ).map( function ( optionValue ) {
+				return { value: optionValue, label: options[ optionValue ] };
+			} );
+
+			return el( SelectControl, shared );
+		}
+
+		if ( 'media' === field.type ) {
+			return mediaControl( key, field, value, onChange, shared );
 		}
 
 		if ( 'datetime' === field.type ) {

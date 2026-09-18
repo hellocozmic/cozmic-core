@@ -45,12 +45,62 @@ function cozmic_core_shared_fields(): array {
 }
 
 /**
+ * The page banner fields.
+ *
+ * A block template has no conditionals, so a page cannot choose its own header
+ * the way the platform's `header_variant` does. These three fields are that
+ * choice, expressed as data the theme reads when it renders the banner in
+ * page.html. They live here rather than in the theme because they are content:
+ * a client who switches themes keeps them, and a theme that knows nothing about
+ * them simply renders its own header.
+ *
+ * A template per variant would have been the obvious alternative and is the
+ * wrong one - only administrators may swap a page's template, so the clients
+ * who actually edit pages, who are Editors, could never reach it. A sidebar
+ * field is available to anyone who can edit the page.
+ *
+ * @return array<string, array<string, mixed>>
+ */
+function cozmic_core_page_banner_fields(): array {
+	return array(
+		'cozmic_banner_style' => array(
+			'label'   => __( 'Banner', 'cozmic-core' ),
+			'type'    => 'select',
+			'options' => array(
+				''     => __( 'Standard', 'cozmic-core' ),
+				'tall' => __( 'Tall', 'cozmic-core' ),
+				'full' => __( 'Full height', 'cozmic-core' ),
+				'none' => __( 'Hidden', 'cozmic-core' ),
+			),
+			'help'    => __( 'The band behind the page title, which shows the featured image. Hidden lets the page start with its own content instead.', 'cozmic-core' ),
+		),
+		'cozmic_banner_focus' => array(
+			'label'   => __( 'Image position', 'cozmic-core' ),
+			'type'    => 'select',
+			'options' => array(
+				''       => __( 'Center', 'cozmic-core' ),
+				'top'    => __( 'Top', 'cozmic-core' ),
+				'bottom' => __( 'Bottom', 'cozmic-core' ),
+			),
+			'help'    => __( 'Which part of the image survives the crop. Choose Top when the faces sit high in the photo.', 'cozmic-core' ),
+		),
+		'cozmic_banner_video' => array(
+			'label' => __( 'Banner video', 'cozmic-core' ),
+			'type'  => 'media',
+			'help'  => __( 'Plays behind the title instead of the image, silently and on a loop. Keep it short, and a few MB at most.', 'cozmic-core' ),
+		),
+	);
+}
+
+/**
  * The field schema, by post type.
  *
- * Types are `text`, `textarea`, `url`, or `datetime`, and each one determines
- * the sanitiser on the way in and the control drawn in the editor sidebar.
+ * Types are `text`, `textarea`, `url`, `datetime`, `select`, or `media`, and
+ * each one determines the sanitiser on the way in and the control drawn in the
+ * editor sidebar. A `select` carries its own `options` map, which doubles as
+ * the list its value is validated against.
  *
- * @return array<string, array<string, array<string, string>>>
+ * @return array<string, array<string, array<string, mixed>>>
  */
 function cozmic_core_field_schema(): array {
 	$cta = array(
@@ -98,7 +148,7 @@ function cozmic_core_field_schema(): array {
 			$cta
 		),
 		'post'                  => array(),
-		'page'                  => array(),
+		'page'                  => cozmic_core_page_banner_fields(),
 	);
 
 	$shared = cozmic_core_shared_fields();
@@ -112,10 +162,15 @@ function cozmic_core_field_schema(): array {
 /**
  * Sanitise a value according to its declared field type.
  *
- * @param mixed  $value Raw incoming value.
- * @param string $type  Field type from the schema.
+ * A `select` is checked against its own options rather than merely escaped: the
+ * values are switches the theme renders from, so an unknown one should fall
+ * back to the default rather than reach a template as a stray class name.
+ *
+ * @param mixed                $value   Raw incoming value.
+ * @param string               $type    Field type from the schema.
+ * @param array<string, string> $options Allowed values, for `select` only.
  */
-function cozmic_core_sanitize_field( mixed $value, string $type ): string {
+function cozmic_core_sanitize_field( mixed $value, string $type, array $options = array() ): string {
 	if ( ! is_scalar( $value ) ) {
 		return '';
 	}
@@ -123,10 +178,11 @@ function cozmic_core_sanitize_field( mixed $value, string $type ): string {
 	$value = (string) $value;
 
 	return match ( $type ) {
-		'url'      => esc_url_raw( trim( $value ) ),
-		'textarea' => sanitize_textarea_field( $value ),
-		'datetime' => cozmic_core_sanitize_datetime( $value ),
-		default    => sanitize_text_field( $value ),
+		'url', 'media' => esc_url_raw( trim( $value ) ),
+		'textarea'     => sanitize_textarea_field( $value ),
+		'datetime'     => cozmic_core_sanitize_datetime( $value ),
+		'select'       => array_key_exists( $value, $options ) ? $value : '',
+		default        => sanitize_text_field( $value ),
 	};
 }
 
@@ -190,7 +246,8 @@ function cozmic_core_register_meta(): void {
 		}
 
 		foreach ( $fields as $key => $field ) {
-			$type = $field['type'] ?? 'text';
+			$type    = $field['type'] ?? 'text';
+			$options = is_array( $field['options'] ?? null ) ? $field['options'] : array();
 
 			register_post_meta(
 				$post_type,
@@ -201,7 +258,7 @@ function cozmic_core_register_meta(): void {
 					'default'           => '',
 					'show_in_rest'      => true,
 					'description'       => $field['label'] ?? $key,
-					'sanitize_callback' => static fn( $value ) => cozmic_core_sanitize_field( $value, $type ),
+					'sanitize_callback' => static fn( $value ) => cozmic_core_sanitize_field( $value, $type, $options ),
 					'auth_callback'     => 'cozmic_core_meta_auth',
 				)
 			);
@@ -256,7 +313,7 @@ function cozmic_core_enqueue_editor_fields(): void {
 	wp_enqueue_script(
 		'cozmic-core-editor-fields',
 		COZMIC_CORE_URL . 'assets/js/editor-fields.js',
-		array( 'wp-plugins', 'wp-editor', 'wp-element', 'wp-components', 'wp-data', 'wp-core-data', 'wp-i18n' ),
+		array( 'wp-plugins', 'wp-editor', 'wp-block-editor', 'wp-element', 'wp-components', 'wp-data', 'wp-core-data', 'wp-i18n' ),
 		COZMIC_CORE_VERSION,
 		true
 	);
