@@ -207,37 +207,14 @@ function cozmic_core_register_post_types(): void {
 }
 add_action( 'init', 'cozmic_core_register_post_types', 5 );
 
-/**
- * Send a news mention's own URL to the article it is about.
- *
- * A mention is a pointer, not a page: the writing that matters lives on the
- * publication's site, and the entry here holds a title, a thumbnail and a
- * sentence. Left alone, WordPress would publish a permalink per mention, each a
- * thin near-duplicate of a page the site does not own - and a visitor who
- * reached one would have to find the "read it" link to get what they came for.
- *
- * So the archive is the page people see, its cards link straight out, and this
- * catches anyone arriving at a single mention another way.
- *
- * 302, not 301: the destination belongs to somebody else and can move or go
- * dead, and this site's URL is the stable one of the two. A mention with no
- * link set is left to render normally.
+/*
+ * A news mention used to redirect to the article it was about, on the reasoning
+ * that the writing lives elsewhere. That was wrong for the case that matters:
+ * a client wants the coverage to be readable on their own site, with the
+ * publication credited and a link out for anyone who wants the original. So a
+ * mention is an ordinary post with its own page, and the theme puts the link to
+ * the source on it. Nothing here redirects.
  */
-function cozmic_core_press_redirect(): void {
-	if ( ! is_singular( COZMIC_CORE_CPT_PRESS ) ) {
-		return;
-	}
-
-	$url = cozmic_core_field( 'cozmic_source_url' );
-
-	if ( '' === $url ) {
-		return;
-	}
-
-	wp_redirect( $url, 302 ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- the destination is deliberately external.
-	exit;
-}
-add_action( 'template_redirect', 'cozmic_core_press_redirect' );
 
 /**
  * Query arguments that sort events by when they happen.

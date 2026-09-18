@@ -45,12 +45,15 @@ function cozmic_core_shared_fields(): array {
 }
 
 /**
- * The page banner fields.
+ * The banner fields, for anything with its own page.
  *
  * A block template has no conditionals, so a page cannot choose its own header
  * the way the platform's `header_variant` does. These three fields are that
- * choice, expressed as data the theme reads when it renders the banner in
- * page.html. They live here rather than in the theme because they are content:
+ * choice, expressed as data the theme reads when it renders the banner. Pages
+ * and single posts of every type carry them, because "this one photo needs to
+ * be taller, or cropped from the top" is not a question only pages ask.
+ *
+ * They live here rather than in the theme because they are content:
  * a client who switches themes keeps them, and a theme that knows nothing about
  * them simply renders its own header.
  *
@@ -61,7 +64,7 @@ function cozmic_core_shared_fields(): array {
  *
  * @return array<string, array<string, mixed>>
  */
-function cozmic_core_page_banner_fields(): array {
+function cozmic_core_banner_fields(): array {
 	return array(
 		'cozmic_banner_style' => array(
 			'label'   => __( 'Banner', 'cozmic-core' ),
@@ -156,14 +159,14 @@ function cozmic_core_field_schema(): array {
 			'cozmic_source_url'  => array(
 				'label' => __( 'Link to the article', 'cozmic-core' ),
 				'type'  => 'url',
-				'help'  => __( 'Where the piece lives. Every card links straight here, and so does this entry\'s own address.', 'cozmic-core' ),
+				'help'  => __( 'Where the piece lives. This entry gets its own page on the site, with a button out to it.', 'cozmic-core' ),
 			),
 		),
 		'post'                  => array(),
-		'page'                  => cozmic_core_page_banner_fields(),
+		'page'                  => array(),
 	);
 
-	$shared = cozmic_core_shared_fields();
+	$shared = array_merge( cozmic_core_banner_fields(), cozmic_core_shared_fields() );
 	foreach ( $schema as $post_type => $fields ) {
 		$schema[ $post_type ] = array_merge( $fields, $shared );
 	}

@@ -28,6 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 const COZMIC_CORE_OPTION_SETUP    = 'cozmic_core_options';
 const COZMIC_CORE_OPTION_BUSINESS = 'cozmic_core_business';
+const COZMIC_CORE_OPTION_ARCHIVES = 'cozmic_core_archives';
 
 /**
  * Site setup defaults.
@@ -66,6 +67,27 @@ function cozmic_core_setup_defaults(): array {
 			'full_editing'      => false,
 		)
 	);
+}
+
+/**
+ * Archive page defaults.
+ *
+ * Empty strings across the board: no banner image, no introduction, and the
+ * layout each archive template already ships. A site that never opens the
+ * screen looks exactly as it did before the screen existed.
+ *
+ * @return array<string, string>
+ */
+function cozmic_core_archive_defaults(): array {
+	$defaults = array();
+
+	foreach ( cozmic_core_post_types() as $type ) {
+		$defaults[ $type . '_image' ]  = '';
+		$defaults[ $type . '_intro' ]  = '';
+		$defaults[ $type . '_layout' ] = '';
+	}
+
+	return (array) apply_filters( 'cozmic_core_archive_defaults', $defaults );
 }
 
 /**
@@ -138,6 +160,28 @@ function cozmic_core_type_enabled( string $type ): bool {
 }
 
 /**
+ * Read one archive-page setting for a content type.
+ *
+ * An archive is nobody's post: it has no featured image to set, no body to
+ * write an introduction in, and no sidebar to configure. These three values fill
+ * that gap, and the theme reads them when it renders the archive.
+ *
+ * Keys are flat (`press_image`, `press_intro`, `press_layout`) so the existing
+ * settings form, merge and sanitise path carry them with no special cases.
+ *
+ * @param string $type Content type slug, such as `press`.
+ * @param string $key  Setting name: `image`, `intro`, or `layout`.
+ */
+function cozmic_core_archive( string $type, string $key ): string {
+	$defaults = cozmic_core_archive_defaults();
+	$stored   = get_option( COZMIC_CORE_OPTION_ARCHIVES, array() );
+	$options  = array_merge( $defaults, is_array( $stored ) ? $stored : array() );
+	$value    = $options[ $type . '_' . $key ] ?? '';
+
+	return is_string( $value ) ? $value : '';
+}
+
+/**
  * Seed both rows on activation.
  *
  * `add_option` rather than `update_option`: activation runs again on every
@@ -146,6 +190,7 @@ function cozmic_core_type_enabled( string $type ): bool {
 function cozmic_core_seed_options(): void {
 	add_option( COZMIC_CORE_OPTION_SETUP, cozmic_core_setup_defaults() );
 	add_option( COZMIC_CORE_OPTION_BUSINESS, cozmic_core_business_defaults() );
+	add_option( COZMIC_CORE_OPTION_ARCHIVES, cozmic_core_archive_defaults() );
 }
 
 /**

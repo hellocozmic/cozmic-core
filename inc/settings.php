@@ -23,8 +23,73 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const COZMIC_CORE_MENU_SLUG  = 'cozmic-core';
-const COZMIC_CORE_SETUP_SLUG = 'cozmic-core-setup';
+const COZMIC_CORE_MENU_SLUG    = 'cozmic-core';
+const COZMIC_CORE_SETUP_SLUG   = 'cozmic-core-setup';
+const COZMIC_CORE_ARCHIVE_SLUG = 'cozmic-core-archives';
+
+/**
+ * The layout choices an archive offers.
+ *
+ * Deliberately few. These are the shapes the theme's archive templates can
+ * actually take without new markup: a count of columns, or rows with the image
+ * beside the text, which is what a list of press mentions or long titles wants.
+ *
+ * @return array<string, string>
+ */
+function cozmic_core_archive_layouts(): array {
+	return array(
+		''     => __( 'Default for this content type', 'cozmic-core' ),
+		'list' => __( 'List, image beside the text', 'cozmic-core' ),
+		'2'    => __( 'Two across', 'cozmic-core' ),
+		'3'    => __( 'Three across', 'cozmic-core' ),
+		'4'    => __( 'Four across', 'cozmic-core' ),
+	);
+}
+
+/**
+ * Archive page fields, grouped by content type.
+ *
+ * Built from whichever types are switched on, so the screen never offers to set
+ * a banner for an archive that does not exist. A `section` row is a heading, not
+ * an input: it carries no value and nothing reads it back.
+ *
+ * @return array<string, array<string, mixed>>
+ */
+function cozmic_core_archive_fields(): array {
+	$fields = array();
+
+	foreach ( cozmic_core_post_types() as $post_type => $type ) {
+		if ( ! cozmic_core_type_enabled( $type ) ) {
+			continue;
+		}
+
+		$object = get_post_type_object( $post_type );
+		$label  = $object instanceof WP_Post_Type ? $object->labels->name : ucfirst( $type );
+
+		$fields[ $type . '_section' ] = array(
+			'label' => $label,
+			'type'  => 'section',
+		);
+
+		$fields[ $type . '_image' ]  = array(
+			'label' => __( 'Banner image', 'cozmic-core' ),
+			'type'  => 'media',
+			'help'  => __( 'Sits behind the title at the top of the page. Left empty, the banner is a plain colour band.', 'cozmic-core' ),
+		);
+		$fields[ $type . '_intro' ]  = array(
+			'label' => __( 'Introduction', 'cozmic-core' ),
+			'type'  => 'textarea',
+			'help'  => __( 'A sentence or two above the list. Left empty, the list starts straight away.', 'cozmic-core' ),
+		);
+		$fields[ $type . '_layout' ] = array(
+			'label'   => __( 'Layout', 'cozmic-core' ),
+			'type'    => 'select',
+			'options' => cozmic_core_archive_layouts(),
+		);
+	}
+
+	return $fields;
+}
 
 /**
  * Business profile fields, in display order.
@@ -169,6 +234,15 @@ function cozmic_core_merge_settings( mixed $input, string $option, array $fields
 				$values[ $key ] = is_scalar( $raw ) ? sanitize_textarea_field( (string) $raw ) : '';
 				break;
 
+			case 'media':
+				$values[ $key ] = is_scalar( $raw ) ? esc_url_raw( trim( (string) $raw ) ) : '';
+				break;
+
+			case 'select':
+				$allowed        = is_array( $field['options'] ?? null ) ? $field['options'] : array();
+				$values[ $key ] = is_scalar( $raw ) && array_key_exists( (string) $raw, $allowed ) ? (string) $raw : '';
+				break;
+
 			case 'lines':
 				$lines          = is_array( $raw ) ? $raw : preg_split( '/\r\n|\r|\n/', (string) $raw );
 				$values[ $key ] = array_values(
@@ -234,6 +308,33 @@ function cozmic_core_register_settings(): void {
 	);
 
 	register_setting(
+		'cozmic_core_archives_group',
+		COZMIC_CORE_OPTION_ARCHIVES,
+		array(
+			'type'              => 'object',
+			'default'           => cozmic_core_archive_defaults(),
+			'sanitize_callback' => static fn( $input ) => cozmic_core_merge_settings(
+				$input,
+				COZMIC_CORE_OPTION_ARCHIVES,
+				cozmic_core_archive_fields(),
+				cozmic_core_archive_defaults()
+			),
+			/*
+			 * The keys are built from whichever content types exist, so the
+			 * schema takes any string value rather than naming each one and
+			 * going stale the moment a type is added.
+			 */
+			'show_in_rest'      => array(
+				'name'   => 'cozmic_archives',
+				'schema' => array(
+					'type'                 => 'object',
+					'additionalProperties' => array( 'type' => 'string' ),
+				),
+			),
+		)
+	);
+
+	register_setting(
 		'cozmic_core_setup_group',
 		COZMIC_CORE_OPTION_SETUP,
 		array(
@@ -275,6 +376,7 @@ function cozmic_core_business_capability(): string {
 	return 'edit_pages';
 }
 add_filter( 'option_page_capability_cozmic_core_business_group', 'cozmic_core_business_capability' );
+add_filter( 'option_page_capability_cozmic_core_archives_group', 'cozmic_core_business_capability' );
 
 /**
  * The admin menu.
@@ -297,6 +399,15 @@ function cozmic_core_admin_menu(): void {
 		'edit_pages',
 		COZMIC_CORE_MENU_SLUG,
 		'cozmic_core_render_business_page'
+	);
+
+	add_submenu_page(
+		COZMIC_CORE_MENU_SLUG,
+		__( 'Content Pages', 'cozmic-core' ),
+		__( 'Content Pages', 'cozmic-core' ),
+		'edit_pages',
+		COZMIC_CORE_ARCHIVE_SLUG,
+		'cozmic_core_render_archives_page'
 	);
 
 	add_submenu_page(
@@ -325,6 +436,13 @@ function cozmic_core_render_field( string $option, string $key, array $field, mi
 	$help  = $field['help'] ?? '';
 	$label = $field['label'] ?? $key;
 
+	// A heading between groups of fields, rather than a field.
+	if ( 'section' === $type ) {
+		echo '<tr><th colspan="2" style="padding-bottom:0"><h2 class="title" style="margin-bottom:0">' . esc_html( $label ) . '</h2></th></tr>';
+
+		return;
+	}
+
 	echo '<tr>';
 	echo '<th scope="row"><label for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label></th>';
 	echo '<td>';
@@ -345,6 +463,38 @@ function cozmic_core_render_field( string $option, string $key, array $field, mi
 		case 'lines':
 			$lines = is_array( $value ) ? implode( "\n", $value ) : (string) $value;
 			echo '<textarea id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '" rows="4" class="large-text code">' . esc_textarea( $lines ) . '</textarea>';
+			break;
+
+		case 'select':
+			$options = is_array( $field['options'] ?? null ) ? $field['options'] : array();
+			echo '<select id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '">';
+			foreach ( $options as $option_value => $option_label ) {
+				printf(
+					'<option value="%s" %s>%s</option>',
+					esc_attr( (string) $option_value ),
+					selected( (string) $value, (string) $option_value, false ),
+					esc_html( (string) $option_label )
+				);
+			}
+			echo '</select>';
+			break;
+
+		/*
+		 * A URL with a picker in front of it. The field stores the URL rather
+		 * than an attachment ID for the same reason the editor's media field
+		 * does: every reader wants something it can render without a second
+		 * lookup. Typing or pasting a URL keeps working if the picker's script
+		 * never loads.
+		 */
+		case 'media':
+			$url = is_scalar( $value ) ? (string) $value : '';
+			echo '<input type="url" id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '" value="' . esc_attr( $url ) . '" class="regular-text cozmic-core-media-field" />';
+			echo ' <button type="button" class="button cozmic-core-media-pick" data-target="' . esc_attr( $id ) . '">' . esc_html__( 'Choose image', 'cozmic-core' ) . '</button>';
+			echo '<div class="cozmic-core-media-preview" style="margin-top:8px">';
+			if ( '' !== $url ) {
+				echo '<img src="' . esc_url( $url ) . '" alt="" style="max-width:240px;height:auto;border-radius:4px" />';
+			}
+			echo '</div>';
 			break;
 
 		default:
@@ -408,6 +558,95 @@ function cozmic_core_render_business_page(): void {
 		array_merge( $defaults, is_array( $stored ) ? $stored : array() )
 	);
 }
+
+/**
+ * Content pages screen.
+ *
+ * The banner, introduction and layout of each content type's listing page. A
+ * client edits this, hence `edit_pages`: it is content about their content, not
+ * a structural switch.
+ *
+ * With no content types switched on there is nothing to configure, and the
+ * screen says so rather than rendering an empty form with a Save button.
+ */
+function cozmic_core_render_archives_page(): void {
+	if ( ! current_user_can( 'edit_pages' ) ) {
+		return;
+	}
+
+	$fields = cozmic_core_archive_fields();
+
+	if ( empty( $fields ) ) {
+		echo '<div class="wrap"><h1>' . esc_html__( 'Content Pages', 'cozmic-core' ) . '</h1>';
+		echo '<p class="description">' . esc_html__( 'Nothing to set up yet. Switch on a content type such as Services or In The News, and its listing page appears here.', 'cozmic-core' ) . '</p></div>';
+
+		return;
+	}
+
+	$defaults = cozmic_core_archive_defaults();
+	$stored   = get_option( COZMIC_CORE_OPTION_ARCHIVES, array() );
+
+	cozmic_core_render_settings_page(
+		__( 'Content Pages', 'cozmic-core' ),
+		__( 'The page that lists everything of one kind: its banner, an introduction, and how the entries are arranged.', 'cozmic-core' ),
+		'cozmic_core_archives_group',
+		COZMIC_CORE_OPTION_ARCHIVES,
+		$fields,
+		array_merge( $defaults, is_array( $stored ) ? $stored : array() )
+	);
+}
+
+/**
+ * The media picker on the Content Pages screen.
+ *
+ * Plain wp.media against the library core already loads in the admin, for the
+ * same reason the editor panel avoids a build step. The field is a URL input
+ * either way, so a browser that never runs this still has a working form.
+ */
+function cozmic_core_enqueue_media_picker( string $hook ): void {
+	if ( ! str_contains( $hook, COZMIC_CORE_ARCHIVE_SLUG ) ) {
+		return;
+	}
+
+	wp_enqueue_media();
+	wp_add_inline_script(
+		'media-editor',
+		<<<'JS'
+		document.addEventListener( 'click', function ( event ) {
+			var button = event.target.closest( '.cozmic-core-media-pick' );
+			if ( ! button || ! window.wp || ! window.wp.media ) {
+				return;
+			}
+
+			event.preventDefault();
+
+			var input = document.getElementById( button.dataset.target );
+			var frame = window.wp.media( {
+				title: 'Choose image',
+				library: { type: 'image' },
+				multiple: false,
+			} );
+
+			frame.on( 'select', function () {
+				var image = frame.state().get( 'selection' ).first().toJSON();
+				var url = ( image.sizes && image.sizes.large ? image.sizes.large.url : image.url ) || '';
+				input.value = url;
+
+				var preview = button.parentNode.querySelector( '.cozmic-core-media-preview' );
+				if ( preview ) {
+					preview.innerHTML = url ? '<img src="" alt="" style="max-width:240px;height:auto;border-radius:4px" />' : '';
+					if ( url ) {
+						preview.querySelector( 'img' ).src = url;
+					}
+				}
+			} );
+
+			frame.open();
+		} );
+		JS
+	);
+}
+add_action( 'admin_enqueue_scripts', 'cozmic_core_enqueue_media_picker' );
 
 /**
  * Site setup screen.
